@@ -4,16 +4,20 @@ import random
 
 # Sample board (editable by user)
 board = [
-    [4, 0, 1, 2, 6, 8, 0, 0, 0],
-    [1, 0, 0, 0, 9, 0, 0, 0, 4],
-    [0, 3, 8, 0, 6, 4, 0, 1, 0],
-    [0, 0, 5, 7, 1, 9, 2, 0, 0],
-    [0, 2, 6, 0, 0, 9, 8, 0, 0],
-    [8, 0, 0, 2, 5, 0, 0, 0, 0],
-    [9, 0, 3, 0, 0, 0, 0, 0, 8],
-    [2, 5, 6, 0, 0, 1, 0, 0, 7],
-    [6, 0, 7, 9, 5, 3, 0, 0, 0]
+    [1, 0, 0, 4, 8, 9, 0, 0, 6],
+    [7, 3, 0, 0, 0, 0, 0, 4, 0],
+    [0, 0, 0, 0, 0, 1, 2, 9, 5],
+
+    [0, 0, 7, 1, 2, 0, 6, 0, 0],
+    [5, 0, 0, 7, 0, 3, 0, 0, 8],
+    [0, 0, 6, 0, 9, 5, 7, 0, 0],
+
+    [9, 1, 4, 6, 0, 0, 0, 0, 0],
+    [0, 2, 0, 0, 0, 0, 0, 3, 7],
+    [8, 0, 0, 5, 1, 2, 0, 0, 4]
 ]
+
+
 
 class SudokuApp:
     def __init__(self, root):
@@ -31,7 +35,11 @@ class SudokuApp:
             for col in range(9):
                 value = board[row][col]
                 entry = tk.Entry(self.root, width=2, font=('Arial', 24), justify='center', borderwidth=2, relief='solid')
-                entry.grid(row=row, column=col, padx=(0 if col % 3 != 0 else 2), pady=(0 if row % 3 != 0 else 2))
+
+                # Add padding to visually separate 3x3 blocks
+                padx = (2 if col % 3 == 0 else 1, 2 if col % 3 == 2 else 1)
+                pady = (2 if row % 3 == 0 else 1, 2 if row % 3 == 2 else 1)
+                entry.grid(row=row, column=col, padx=padx, pady=pady)
 
                 if value != 0:
                     entry.insert(0, str(value))
