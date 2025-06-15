@@ -10,29 +10,19 @@ class SudokuApp:
         self.root.title("Sudoku Game with Levels")
         self.level = 1
         self.board = []
+        self.original_board = []
         self.selected_cell = None
         self.cells = [[None for _ in range(9)] for _ in range(9)]
+
+        self.grid_frame = tk.Frame(self.root, bg="white")
+        self.grid_frame.pack(pady=10)
 
         self.load_board()
         self.draw_grid()
         self.draw_buttons()
 
-        model_btn = tk.Button(
-            self.root,
-            text="Model Hint",
-            command=self.provide_model_hint,
-            bg="#add8e6",          # Light blue background
-            relief="flat",         # No border/sharp edges
-            bd=0,                  # Border width 0
-            highlightthickness=0,  # No focus border
-            font=('Arial', 12),
-            padx=10,
-            pady=5
-        )
-        model_btn.grid(row=9, column=3, columnspan=3, pady=10)
-
     def load_board(self):
-        filename = f"Sudoku\Level{self.level}.text"
+        filename = f"Sudoku/Level{self.level}.txt"
         if not os.path.exists(filename):
             messagebox.showinfo("🎉 Finished", "No more levels. You’ve completed the game!")
             self.root.quit()
@@ -41,23 +31,22 @@ class SudokuApp:
         with open(filename, 'r') as f:
             try:
                 self.board = ast.literal_eval(f.read())
+                self.original_board = [row[:] for row in self.board]
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to read {filename}:\n{e}")
                 self.root.quit()
                 return
 
-        # ✅ Add safety checks
         if len(self.board) != 9 or any(len(row) != 9 for row in self.board):
             messagebox.showerror("Board Error", f"Level {self.level} board is not a valid 9x9 grid.")
-            print(f"[DEBUG] Board content: {self.board}")
             self.root.quit()
             return
-
 
     def draw_grid(self):
         for row in range(9):
             for col in range(9):
-                entry = tk.Entry(self.root, width=2, font=('Arial', 24), justify='center', borderwidth=1, relief='solid')
+                bg_color = "#ffffff" if (row // 3 + col // 3) % 2 == 0 else "#e0f7fa"
+                entry = tk.Entry(self.grid_frame, width=3, font=('Arial', 20), justify='center', borderwidth=1, relief='solid', bg=bg_color)
                 padx = (2 if col % 3 == 0 else 1, 2 if col % 3 == 2 else 1)
                 pady = (2 if row % 3 == 0 else 1, 2 if row % 3 == 2 else 1)
                 entry.grid(row=row, column=col, padx=padx, pady=pady, ipadx=5, ipady=5)
@@ -74,13 +63,24 @@ class SudokuApp:
                 entry.delete(0, tk.END)
                 if value != 0:
                     entry.insert(0, str(value))
-                    entry.config(state='readonly', disabledforeground='black', readonlybackground='#f0f0f0')
+                    entry.config(state='readonly', disabledforeground='black', readonlybackground=entry.cget("bg"))
                 else:
-                    entry.config(state='normal', fg='blue', bg='white')
+                    entry.config(state='normal', fg='blue')
 
     def draw_buttons(self):
-        model_btn = tk.Button(self.root, text="Model Hint", command=self.provide_model_hint)
-        model_btn.grid(row=9, column=3, columnspan=3)
+        btn_frame = tk.Frame(self.root, bg="white")
+        btn_frame.pack(pady=10)
+
+        btn_style = {"font": ('Arial', 14), "padx": 20, "pady": 12, "bg": "#4fc3f7", "fg": "white", "relief": "flat"}
+
+        model_btn = tk.Button(btn_frame, text="✨ Hint", command=self.provide_model_hint, **btn_style)
+        model_btn.grid(row=0, column=0, padx=10)
+
+        refresh_btn = tk.Button(btn_frame, text="🔁 Refresh", command=self.refresh_board, **btn_style)
+        refresh_btn.grid(row=0, column=1, padx=10)
+
+        next_btn = tk.Button(btn_frame, text="➡ Next Level", command=self.next_level, **btn_style)
+        next_btn.grid(row=0, column=2, padx=10)
 
     def select_cell(self, row, col):
         self.selected_cell = (row, col)
@@ -128,6 +128,12 @@ class SudokuApp:
         return set(range(1, 10)) - used
 
     def provide_model_hint(self):
+        print("[Model Hint] Using Simulated Annealing to guess a possible value...")
+
+        def get_possibilities_matrix(b):
+            # Returns a 2D list of sets containing possible values for each empty cell
+            return [[self.get_possibilities(r, c) if b[r][c] == 0 else set() for c in range(9)] for r in range(9)]
+
         def fill_random(b):
             filled = [row[:] for row in b]
             for r in range(9):
@@ -141,8 +147,8 @@ class SudokuApp:
         def fitness(b):
             score = 0
             for i in range(9):
-                score += len(set(b[i]))
-                score += len(set([b[r][i] for r in range(9)]))
+                score += len(set(b[i]))  # Row uniqueness
+                score += len(set([b[r][i] for r in range(9)]))  # Column uniqueness
             return score
 
         def get_neighbors(b):
@@ -174,8 +180,11 @@ class SudokuApp:
             return best
 
         solved = simulated_annealing()
+
+        # Step: Try to extract a confident hint from the model solution
         best_cell = None
         best_possibilities = 10
+
         for r in range(9):
             for c in range(9):
                 if self.board[r][c] == 0:
@@ -191,36 +200,104 @@ class SudokuApp:
             self.cells[r][c].config(fg='blue')
             self.board[r][c] = val
             self.check_board_status()
+            print(f"[Model Hint] Best confident value {val} added at ({r}, {c}) with {best_possibilities} possibilities.")
         else:
-            messagebox.showinfo("Model Hint", "No confident hint found.")
+            print("[Model Hint] No confident hint found. The board might be unsolvable.")
+            messagebox.showwarning("⚠️ No Hint Available", "Invalid answers. No hint available. The board might be unsolvable.")
+
+    def is_solvable(self):
+        def is_valid_board_state():
+            for r in range(9):
+                row_vals = [val for val in self.board[r] if val != 0]
+                if len(row_vals) != len(set(row_vals)):
+                    return False
+            for c in range(9):
+                col_vals = [self.board[r][c] for r in range(9) if self.board[r][c] != 0]
+                if len(col_vals) != len(set(col_vals)):
+                    return False
+            for br in range(0, 9, 3):
+                for bc in range(0, 9, 3):
+                    box = []
+                    for r in range(br, br + 3):
+                        for c in range(bc, bc + 3):
+                            val = self.board[r][c]
+                            if val != 0:
+                                box.append(val)
+                    if len(box) != len(set(box)):
+                        return False
+            return True
+
+        def is_valid(r, c, n):
+            for i in range(9):
+                if self.board[r][i] == n or self.board[i][c] == n:
+                    return False
+            sr, sc = (r // 3) * 3, (c // 3) * 3
+            for i in range(sr, sr + 3):
+                for j in range(sc, sc + 3):
+                    if self.board[i][j] == n:
+                        return False
+            return True
+
+        def solve():
+            for r in range(9):
+                for c in range(9):
+                    if self.board[r][c] == 0:
+                        for n in range(1, 10):
+                            if is_valid(r, c, n):
+                                self.board[r][c] = n
+                                if solve():
+                                    return True
+                                self.board[r][c] = 0
+                        return False
+            return True
+
+        if not is_valid_board_state():
+            messagebox.showerror("❌ Invalid Board", f"Level {self.level} board has conflicts (e.g., duplicate numbers).")
+            return False
+
+        backup = [row[:] for row in self.board]
+        solvable = solve()
+        self.board = backup
+        if not solvable:
+            messagebox.showwarning("🛑 Unsolvable", f"Level {self.level} board is not solvable.")
+        return solvable
+
+    def refresh_board(self):
+        self.board = [row[:] for row in self.original_board]
+        self.populate_board()
 
     def next_level(self):
         self.level += 1
+
+        # Clear the existing grid widgets
+        for row in self.cells:
+            for cell in row:
+                cell.destroy()
+
+        # Reload and draw the new board
         self.load_board()
-        self.populate_board()
+        self.draw_grid()
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("500x600")
+    root.geometry("600x600")
     root.title("Sudoku Game")
 
-    # Create start screen frame
-    start_frame = tk.Frame(root, bg="#e0f7fa")
+    start_frame = tk.Frame(root, bg="#fce4ec")
     start_frame.pack(fill="both", expand=True)
 
-    title = tk.Label(start_frame, text="🧠 Sudoku Challenge", font=("Arial", 28, "bold"), bg="#e0f7fa", fg="#00796b")
+    title = tk.Label(start_frame, text="🧠 Sudoku Challenge", font=("Arial", 30, "bold"), bg="#fce4ec", fg="#ad1457")
     title.pack(pady=60)
 
-    subtitle = tk.Label(start_frame, text="Sharpen your mind\nOne puzzle at a time!", font=("Arial", 14), bg="#e0f7fa")
+    subtitle = tk.Label(start_frame, text="Sharpen your mind\nOne puzzle at a time!", font=("Arial", 14), bg="#fce4ec")
     subtitle.pack(pady=10)
 
     def start_game():
         start_frame.destroy()
         SudokuApp(root)
 
-    play_btn = tk.Button(start_frame, text="▶ Play", command=start_game, font=("Arial", 16, "bold"), bg="#4fc3f7", fg="white", relief="flat", padx=20, pady=10, borderwidth=0)
+    play_btn = tk.Button(start_frame, text="▶ Play", command=start_game, font=("Arial", 18, "bold"), bg="#f06292", fg="white", relief="flat", padx=25, pady=15, borderwidth=0)
     play_btn.pack(pady=30)
     play_btn.config(highlightthickness=0)
 
     root.mainloop()
-
