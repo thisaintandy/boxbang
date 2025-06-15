@@ -17,8 +17,6 @@ board = [
     [8, 0, 0, 5, 1, 2, 0, 0, 4]
 ]
 
-
-
 class SudokuApp:
     def __init__(self, root):
         self.root = root
